@@ -32,6 +32,7 @@ import {
   X,
 
   // New icons
+  /*
   Calendar as CalendarIcon,
   Clock,
   Award,
@@ -48,7 +49,7 @@ import {
   ChevronDown,
   ArrowRight,
   History,
-  Layers,
+  Layers,*/
 } from "lucide-react";
 
 
