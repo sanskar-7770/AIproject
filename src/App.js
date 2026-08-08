@@ -65,30 +65,43 @@ import {
    STORAGE
 ========================================================= */
 
-const USERS_KEY = "apexstudy_users_v2";
 const SESSION_KEY = "apexstudy_current_user_v2";
+const LEGACY_USERS_KEY = "apexstudy_users_v2";
+const API_BASE = process.env.REACT_APP_API_URL || "/api";
 
-const getUsers = () => {
+const getLegacyUser = (email) => {
   try {
-    return JSON.parse(localStorage.getItem(USERS_KEY)) || {};
+    const users = JSON.parse(localStorage.getItem(LEGACY_USERS_KEY)) || {};
+    return users[email.trim().toLowerCase()] || null;
   } catch {
-    return {};
+    return null;
   }
 };
 
-const saveUsers = (users) => {
-  localStorage.setItem(USERS_KEY, JSON.stringify(users));
-};
-
-const getCurrentUserEmail = () =>
+const getSessionToken = () =>
   localStorage.getItem(SESSION_KEY) || null;
 
-const saveCurrentUser = (email) => {
-  if (email) {
-    localStorage.setItem(SESSION_KEY, email);
+const saveSessionToken = (token) => {
+  if (token) {
+    localStorage.setItem(SESSION_KEY, token);
   } else {
     localStorage.removeItem(SESSION_KEY);
   }
+};
+
+const api = async (path, { method = "GET", body } = {}) => {
+  const token = getSessionToken();
+  const response = await fetch(`${API_BASE}${path}`, {
+    method,
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    ...(body ? { body: JSON.stringify(body) } : {}),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || "Something went wrong.");
+  return data;
 };
 
 const createUserData = (courseId) => ({
@@ -145,9 +158,9 @@ const getDateLabel = (date) => {
 export default function App() {
    // ============================================================
 
-  const [currentEmail, setCurrentEmail] = useState(getCurrentUserEmail());
-
-  const [users, setUsers] = useState(getUsers());
+  const [currentEmail, setCurrentEmail] = useState(null);
+  const [users, setUsers] = useState({});
+  const [authReady, setAuthReady] = useState(false);
 
   const [route, setRoute] = useState(
     window.location.pathname === "/"
@@ -158,6 +171,25 @@ export default function App() {
   const [mobileMenu, setMobileMenu] = useState(false);
 
   const currentUser = currentEmail ? users[currentEmail] : null;
+
+  useEffect(() => {
+    const restoreSession = async () => {
+      if (!getSessionToken()) {
+        setAuthReady(true);
+        return;
+      }
+      try {
+        const { user } = await api("/auth/me");
+        setUsers({ [user.email]: user });
+        setCurrentEmail(user.email);
+      } catch {
+        saveSessionToken(null);
+      } finally {
+        setAuthReady(true);
+      }
+    };
+    restoreSession();
+  }, []);
 
   /* -------------------------------------------------------
      ROUTING
@@ -198,34 +230,33 @@ export default function App() {
      LOGIN
   ------------------------------------------------------- */
 
-  const login = ({ email, password }) => {
-    const normalizedEmail = email.trim().toLowerCase();
-    const allUsers = getUsers();
-    const user = allUsers[normalizedEmail];
-
-    if (!user) {
-      return {
-        success: false,
-        message: "No account found with this email.",
-      };
+  const login = async ({ email, password }) => {
+    try {
+      const { token, user } = await api("/auth/login", { method: "POST", body: { email, password } });
+      saveSessionToken(token);
+      setUsers({ [user.email]: user });
+      setCurrentEmail(user.email);
+      navigate("/dashboard");
+      return { success: true };
+    } catch (error) {
+      const legacyUser = getLegacyUser(email);
+      if (!legacyUser || legacyUser.password !== password) {
+        return { success: false, message: error.message };
+      }
+      try {
+        const { token, user } = await api("/auth/migrate", { method: "POST", body: { user: legacyUser, password } });
+        saveSessionToken(token);
+        setUsers({ [user.email]: user });
+        setCurrentEmail(user.email);
+        navigate("/dashboard");
+        return { success: true };
+      } catch (migrationError) {
+        return { success: false, message: migrationError.message };
+      }
     }
-
-    if (user.password !== password) {
-      return {
-        success: false,
-        message: "Incorrect password.",
-      };
-    }
-
-    saveCurrentUser(normalizedEmail);
-    setUsers(allUsers);
-    setCurrentEmail(normalizedEmail);
-    navigate("/dashboard");
-
-    return { success: true };
   };
 
-  const signup = ({
+  const signup = async ({
     name,
     email,
     password,
@@ -233,43 +264,23 @@ export default function App() {
     attempt,
     dailyGoal,
   }) => {
-    const normalizedEmail = email.trim().toLowerCase();
-    const allUsers = getUsers();
-
-    if (allUsers[normalizedEmail]) {
-      return {
-        success: false,
-        message: "An account with this email already exists.",
-      };
+    try {
+      const { token, user } = await api("/auth/signup", {
+        method: "POST",
+        body: { name, email, password, course, attempt, dailyGoal: Number(dailyGoal) || 6, ...createUserData(course) },
+      });
+      saveSessionToken(token);
+      setUsers({ [user.email]: user });
+      setCurrentEmail(user.email);
+      navigate("/dashboard");
+      return { success: true };
+    } catch (error) {
+      return { success: false, message: error.message };
     }
-
-    const user = {
-      id: `user-${Date.now()}`,
-      name: name.trim(),
-      email: normalizedEmail,
-      password,
-      course,
-      attempt,
-      dailyGoal: Number(dailyGoal) || 6,
-      createdAt: new Date().toISOString(),
-      ...createUserData(course),
-    };
-
-    allUsers[normalizedEmail] = user;
-
-    saveUsers(allUsers);
-    saveCurrentUser(normalizedEmail);
-
-    setUsers(allUsers);
-    setCurrentEmail(normalizedEmail);
-
-    navigate("/dashboard");
-
-    return { success: true };
   };
 
   const logout = () => {
-    saveCurrentUser(null);
+    saveSessionToken(null);
     setCurrentEmail(null);
     navigate("/login");
   };
@@ -291,8 +302,10 @@ export default function App() {
           },
         };
 
-        saveUsers(updated);
         return updated;
+      });
+      api("/users/me", { method: "PATCH", body: updates }).catch((error) => {
+        console.error("Unable to save changes:", error.message);
       });
     },
     [currentEmail]
@@ -436,6 +449,10 @@ export default function App() {
      NOT LOGGED IN
   ------------------------------------------------------- */
 
+  if (!authReady || (!currentUser && getSessionToken())) {
+    return <div className="min-h-screen bg-[#070b14]" />;
+  }
+
   if (!currentUser || !currentEmail) {
     return (
       <AuthScreen
@@ -513,11 +530,7 @@ export default function App() {
 
                 <div>
                   <p className="text-xs text-slate-500">
-                    {currentUser.course === "foundation"
-                      ? "CA Foundation"
-                      : currentUser.course === "final"
-                      ? "CA Final"
-                      : "CA Intermediate"}
+                    {getCourse(currentUser.course).name}
                   </p>
 
                   <h1 className="font-semibold text-white">
@@ -627,6 +640,10 @@ export default function App() {
                 logout={logout}
               />
             )}
+
+            {route === "/admin" && currentUser.role === "admin" && (
+              <AdminPage />
+            )}
           </div>
         </main>
       </div>
@@ -680,6 +697,9 @@ function Sidebar({
       label: "Analytics",
       icon: BarChart3,
     },
+    ...(currentUser.role === "admin"
+      ? [{ path: "/admin", label: "Admin panel", icon: Users }]
+      : []),
   ];
 
   return (
@@ -818,11 +838,11 @@ function LoginForm({ onLogin, switchToSignup }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
 
-  const submit = (e) => {
+  const submit = async (e) => {
     e.preventDefault();
     setError("");
 
-    const result = onLogin({
+    const result = await onLogin({
       email,
       password,
     });
@@ -900,7 +920,7 @@ function SignupForm({ onSignup, switchToLogin }) {
     }));
   };
 
-  const submit = (e) => {
+  const submit = async (e) => {
     e.preventDefault();
     setError("");
 
@@ -914,7 +934,7 @@ function SignupForm({ onSignup, switchToLogin }) {
       return;
     }
 
-    const result = onSignup(form);
+    const result = await onSignup(form);
 
     if (!result.success) {
       setError(result.message);
@@ -961,7 +981,7 @@ function SignupForm({ onSignup, switchToLogin }) {
 
       <div>
         <label className="mb-2 block text-xs font-medium text-slate-400">
-          Course
+          What are you preparing for?
         </label>
 
         <div className="grid grid-cols-3 gap-2">
@@ -2240,6 +2260,70 @@ function AnalyticsPage({
 }
 
 /* =========================================================
+   ADMIN
+========================================================= */
+
+function AdminPage() {
+  const [accounts, setAccounts] = useState([]);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadUsers = async () => {
+      try {
+        const { users } = await api("/admin/users");
+        setAccounts(users);
+      } catch (requestError) {
+        setError(requestError.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadUsers();
+  }, []);
+
+  const totalStudySeconds = accounts.reduce(
+    (total, account) => total + (account.sessions || []).reduce((sum, session) => sum + (session.durationSeconds || 0), 0),
+    0
+  );
+
+  return (
+    <div className="mx-auto max-w-6xl space-y-6">
+      <div>
+        <h2 className="text-2xl font-bold">Admin panel</h2>
+        <p className="mt-1 text-sm text-slate-500">See registered users and their study progress.</p>
+      </div>
+
+      {error && <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-400">{error}</div>}
+
+      <div className="grid gap-4 sm:grid-cols-3">
+        <StatCard icon={Users} label="Registered users" value={accounts.length} subtitle="Including administrator accounts" />
+        <StatCard icon={Clock3} label="Study time logged" value={formatHours(totalStudySeconds)} subtitle="Across all users" />
+        <StatCard icon={BookOpen} label="Study sessions" value={accounts.reduce((total, account) => total + (account.sessions || []).length, 0)} subtitle="Completed sessions" />
+      </div>
+
+      <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/60">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[700px] text-left text-sm">
+            <thead className="border-b border-slate-800 text-xs uppercase tracking-wide text-slate-500">
+              <tr><th className="px-5 py-4">User</th><th className="px-5 py-4">Preparing for</th><th className="px-5 py-4">Sessions</th><th className="px-5 py-4">Study time</th><th className="px-5 py-4">Joined</th></tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800/80">
+              {!loading && accounts.map((account) => {
+                const seconds = (account.sessions || []).reduce((sum, session) => sum + (session.durationSeconds || 0), 0);
+                return <tr key={account.id} className="text-slate-300"><td className="px-5 py-4"><p className="font-medium text-white">{account.name}</p><p className="text-xs text-slate-500">{account.email}{account.role === "admin" ? " · Admin" : ""}</p></td><td className="px-5 py-4">{getCourse(account.course).name}</td><td className="px-5 py-4">{(account.sessions || []).length}</td><td className="px-5 py-4">{formatHours(seconds)}</td><td className="px-5 py-4 text-slate-500">{getDateLabel(account.createdAt)}</td></tr>;
+              })}
+              {loading && <tr><td colSpan="5" className="px-5 py-8 text-center text-slate-500">Loading users…</td></tr>}
+              {!loading && accounts.length === 0 && <tr><td colSpan="5" className="px-5 py-8 text-center text-slate-500">No users yet.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* =========================================================
    PROFILE
 ========================================================= */
 
@@ -2253,12 +2337,17 @@ function ProfilePage({
     user.attempt || ""
   );
   const [goal, setGoal] = useState(user.dailyGoal);
+  const [course, setCourse] = useState(user.course);
 
   const save = () => {
     updateUser({
       name,
       attempt,
       dailyGoal: Number(goal),
+      course,
+      ...(course !== user.course
+        ? { subjects: getCourse(course).subjects, activeSession: null }
+        : {}),
     });
   };
 
@@ -2315,6 +2404,35 @@ function ProfilePage({
               className="w-full rounded-xl border border-slate-800 bg-slate-900 px-4 py-3 text-sm outline-none focus:border-sky-500"
               placeholder="e.g. May 2027"
             />
+          </div>
+
+          <div>
+            <label className="mb-2 block text-xs font-medium text-slate-400">
+              Preparing for
+            </label>
+
+            <div className="grid grid-cols-3 gap-2">
+              {Object.values(COURSE_DATA).map((item) => (
+                <button
+                  type="button"
+                  key={item.id}
+                  onClick={() => setCourse(item.id)}
+                  className={`rounded-xl border p-3 text-xs transition ${
+                    course === item.id
+                      ? "border-sky-500 bg-sky-500/10 text-sky-400"
+                      : "border-slate-800 bg-slate-900 text-slate-400 hover:border-slate-700"
+                  }`}
+                >
+                  {item.shortName}
+                </button>
+              ))}
+            </div>
+
+            {course !== user.course && (
+              <p className="mt-2 text-xs text-amber-400">
+                Saving will replace your active subject list with starter subjects for this path. Your completed history stays saved.
+              </p>
+            )}
           </div>
 
           <div>
@@ -2423,6 +2541,7 @@ function getPageTitle(route) {
   if (route === "/targets") return "Daily Targets";
   if (route === "/exams") return "Exams";
   if (route === "/analytics") return "Analytics";
+  if (route === "/admin") return "Admin panel";
   if (route === "/profile") return "Profile";
 
   return "ApexStudy";

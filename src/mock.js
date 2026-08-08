@@ -122,6 +122,77 @@ export const COURSE_DATA = {
       },
     ],
   },
+
+  school: {
+    id: "school",
+    name: "School & Board Exams",
+    shortName: "School",
+    subjects: [
+      { id: "school-maths", name: "Mathematics", code: "MATH", color: "#38bdf8", targetHoursWeekly: 8 },
+      { id: "school-science", name: "Science", code: "SCI", color: "#10b981", targetHoursWeekly: 8 },
+      { id: "school-english", name: "English", code: "ENG", color: "#a855f7", targetHoursWeekly: 6 },
+      { id: "school-social", name: "Social Science", code: "SST", color: "#f59e0b", targetHoursWeekly: 6 },
+    ],
+  },
+
+  college: {
+    id: "college",
+    name: "College & University",
+    shortName: "College",
+    subjects: [
+      { id: "college-core", name: "Core Subject", code: "CORE", color: "#38bdf8", targetHoursWeekly: 8 },
+      { id: "college-major", name: "Major Paper", code: "MAJOR", color: "#a855f7", targetHoursWeekly: 8 },
+      { id: "college-elective", name: "Elective", code: "ELEC", color: "#10b981", targetHoursWeekly: 5 },
+      { id: "college-project", name: "Projects & Assignments", code: "PROJ", color: "#f59e0b", targetHoursWeekly: 5 },
+    ],
+  },
+
+  competitive: {
+    id: "competitive",
+    name: "Competitive Exams",
+    shortName: "Competitive",
+    subjects: [
+      { id: "comp-quant", name: "Quantitative Aptitude", code: "QUANT", color: "#38bdf8", targetHoursWeekly: 8 },
+      { id: "comp-reasoning", name: "Logical Reasoning", code: "REAS", color: "#a855f7", targetHoursWeekly: 7 },
+      { id: "comp-verbal", name: "Verbal Ability", code: "VERB", color: "#10b981", targetHoursWeekly: 6 },
+      { id: "comp-general", name: "General Awareness", code: "GA", color: "#f59e0b", targetHoursWeekly: 6 },
+    ],
+  },
+
+  government: {
+    id: "government",
+    name: "Government Exams",
+    shortName: "Govt. Exams",
+    subjects: [
+      { id: "govt-aptitude", name: "Aptitude", code: "APT", color: "#38bdf8", targetHoursWeekly: 8 },
+      { id: "govt-reasoning", name: "Reasoning", code: "REAS", color: "#a855f7", targetHoursWeekly: 7 },
+      { id: "govt-gk", name: "General Knowledge", code: "GK", color: "#f59e0b", targetHoursWeekly: 7 },
+      { id: "govt-language", name: "Language", code: "LANG", color: "#10b981", targetHoursWeekly: 5 },
+    ],
+  },
+
+  certification: {
+    id: "certification",
+    name: "Professional Certification",
+    shortName: "Certification",
+    subjects: [
+      { id: "cert-concepts", name: "Core Concepts", code: "CORE", color: "#38bdf8", targetHoursWeekly: 8 },
+      { id: "cert-practice", name: "Practice & Labs", code: "LAB", color: "#10b981", targetHoursWeekly: 7 },
+      { id: "cert-revision", name: "Revision", code: "REV", color: "#a855f7", targetHoursWeekly: 5 },
+      { id: "cert-mocks", name: "Mock Tests", code: "MOCK", color: "#f59e0b", targetHoursWeekly: 4 },
+    ],
+  },
+
+  selfStudy: {
+    id: "selfStudy",
+    name: "Self Study & Other Goals",
+    shortName: "Self Study",
+    subjects: [
+      { id: "self-learning", name: "Primary Learning", code: "LEARN", color: "#38bdf8", targetHoursWeekly: 8 },
+      { id: "self-practice", name: "Practice", code: "PRAC", color: "#10b981", targetHoursWeekly: 7 },
+      { id: "self-revision", name: "Review & Revision", code: "REV", color: "#a855f7", targetHoursWeekly: 5 },
+    ],
+  },
 };
 
 export const getCourse = (courseId) =>

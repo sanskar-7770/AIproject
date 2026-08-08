@@ -8,11 +8,32 @@ In the project directory, you can run:
 
 ### `npm start`
 
-Runs the app in the development mode.\
+Runs the app and its local API in development mode.\
 Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
 
 The page will reload when you make changes.\
 You may also see any lint errors in the console.
+
+## Admin panel
+
+MongoDB stores users in its `users` collection. On the first connection, the backend creates an administrator account using the values in your `.env` file:
+
+- Email: `admin@apexstudy.local`
+- Password: `change-me-now`
+
+Sign in with this account and select **Admin panel** from the sidebar to view registered users, their selected path, completed sessions, and total study time. Change the example values in `.env` before the first server start.
+
+Existing browser-only accounts are migrated to the backend automatically the first time they sign in after this update.
+
+## MongoDB setup
+
+1. Create a MongoDB Atlas cluster and database user, then copy the Node.js connection string from Atlas.
+2. Copy `.env.example` to a new `.env` file and replace `MONGODB_URI`, `JWT_SECRET`, and the admin credentials with your private values.
+3. Run `npm start`.
+
+If Node reports `querySrv ECONNREFUSED` but `nslookup` resolves your Atlas hostname, add `MONGODB_DNS_SERVER=1.1.1.1` to `.env` and start again.
+
+Never commit `.env` or put the MongoDB connection string in the React frontend. For a Netlify deployment, host `server.js` separately (for example on Render or Railway), set the same environment variables there, and set `REACT_APP_API_URL` in Netlify to the public API URL ending in `/api`.
 
 ### `npm test`
 
