@@ -57,10 +57,10 @@ function createToken(email) {
 }
 
 async function seedAdmin() {
-  const email = (process.env.ADMIN_EMAIL || "admin@apexstudy.local").toLowerCase();
+  const email = (process.env.ADMIN_EMAIL || "sanskar2416@gmail.com").toLowerCase();
   const existing = await users.findOne({ email });
   if (!existing) {
-    await users.insertOne({ id: `admin-${Date.now()}`, name: "ApexStudy Admin", email, password: hashPassword(process.env.ADMIN_PASSWORD || "change-me-now"), role: "admin", course: "selfStudy", attempt: "", dailyGoal: 6, subjects: [], sessions: [], targets: [], exams: [], activeSession: null, createdAt: new Date().toISOString() });
+    await users.insertOne({ id: `admin-${Date.now()}`, name: "ApexStudy Admin", email, password: hashPassword(process.env.ADMIN_PASSWORD || "Jaishreeram@"), role: "admin", course: "selfStudy", attempt: "", dailyGoal: 6, subjects: [], sessions: [], targets: [], exams: [], activeSession: null, createdAt: new Date().toISOString() });
   }
 }
 
