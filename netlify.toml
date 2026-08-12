@@ -1,0 +1,9 @@
+[build]
+  command = "npm run build"
+  publish = "build"
+
+# Let React handle client-side routes such as /dashboard and /profile after a refresh.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
