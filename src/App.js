@@ -14,10 +14,12 @@ import {
   Check,
   ChevronRight,
   Clock3,
+  FileText,
   GraduationCap,
   Home,
   LogOut,
   Menu,
+  MessageCircle,
   Play,
   Pause,
   Plus,
@@ -633,6 +635,15 @@ export default function App() {
               />
             )}
 
+            {route === "/ca-practice" &&
+              ["foundation", "intermediate", "final"].includes(currentUser.course) && (
+                <CAPracticePage user={currentUser} />
+              )}
+
+            {route === "/assistant" && (
+              <StudyAssistantPage user={currentUser} />
+            )}
+
             {route === "/profile" && (
               <ProfilePage
                 user={currentUser}
@@ -697,6 +708,14 @@ function Sidebar({
       label: "Analytics",
       icon: BarChart3,
     },
+    {
+      path: "/assistant",
+      label: "AI Study Assistant",
+      icon: MessageCircle,
+    },
+    ...(["foundation", "intermediate", "final"].includes(currentUser.course)
+      ? [{ path: "/ca-practice", label: "CA Practice Papers", icon: FileText }]
+      : []),
     ...(currentUser.role === "admin"
       ? [{ path: "/admin", label: "Admin panel", icon: Users }]
       : []),
@@ -2260,6 +2279,144 @@ function AnalyticsPage({
 }
 
 /* =========================================================
+   AI STUDY ASSISTANT
+========================================================= */
+
+function StudyAssistantPage({ user }) {
+  const [question, setQuestion] = useState("");
+  const [messages, setMessages] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const courseName = getCourse(user.course).name;
+
+  const askQuestion = async (event) => {
+    event.preventDefault();
+    const trimmedQuestion = question.trim();
+    if (!trimmedQuestion || loading) return;
+
+    const nextMessages = [...messages, { role: "user", content: trimmedQuestion }];
+    setMessages(nextMessages);
+    setQuestion("");
+    setError("");
+    setLoading(true);
+
+    try {
+      const { answer } = await api("/assistant", {
+        method: "POST",
+        body: { question: trimmedQuestion, history: messages },
+      });
+      setMessages([...nextMessages, { role: "assistant", content: answer }]);
+    } catch (requestError) {
+      setError(requestError.message);
+      setMessages(messages);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="mx-auto flex max-w-4xl flex-col gap-5">
+      <div>
+        <p className="text-sm font-medium text-sky-400">Personalized for {courseName}</p>
+        <h2 className="mt-1 text-2xl font-bold">AI Study Assistant</h2>
+        <p className="mt-2 text-sm text-slate-500">Ask doubts, request simple explanations, make a revision plan, or work through practice questions.</p>
+      </div>
+
+      <div className="min-h-[380px] rounded-2xl border border-slate-800 bg-slate-950/60 p-4 sm:p-6">
+        {messages.length === 0 ? (
+          <div className="flex min-h-[330px] flex-col items-center justify-center text-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-500/10 text-sky-400"><MessageCircle size={23} /></div>
+            <h3 className="mt-4 font-semibold">What would you like to understand?</h3>
+            <p className="mt-2 max-w-md text-sm text-slate-500">Try: “Explain this topic simply”, “Make a 7-day revision plan”, or “Give me a practice question.”</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {messages.map((message, index) => (
+              <div key={`${message.role}-${index}`} className={`max-w-[90%] rounded-2xl px-4 py-3 text-sm leading-6 whitespace-pre-wrap ${message.role === "user" ? "ml-auto bg-sky-500 text-white" : "bg-slate-900 text-slate-200"}`}>
+                {message.content}
+              </div>
+            ))}
+            {loading && <div className="w-fit rounded-2xl bg-slate-900 px-4 py-3 text-sm text-slate-400">Thinking…</div>}
+          </div>
+        )}
+      </div>
+
+      {error && <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-400">{error}</div>}
+
+      <form onSubmit={askQuestion} className="flex gap-3">
+        <textarea value={question} onChange={(event) => setQuestion(event.target.value)} maxLength={2000} rows={2} placeholder={`Ask a ${courseName} study question…`} className="min-h-[54px] flex-1 resize-none rounded-xl border border-slate-800 bg-slate-900 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-600 focus:border-sky-500" />
+        <button disabled={loading || !question.trim()} className="rounded-xl bg-sky-500 px-5 text-sm font-semibold text-white transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-50">Ask</button>
+      </form>
+
+      <p className="text-center text-xs text-slate-600">AI responses can be wrong. Verify important exam, legal, or syllabus information with official sources.</p>
+    </div>
+  );
+}
+
+/* =========================================================
+   CA PRACTICE PAPERS
+========================================================= */
+
+function CAPracticePage({ user }) {
+  const courseName = getCourse(user.course).name;
+  const officialResources = [
+    {
+      title: "Revision Test Papers",
+      description: "Open ICAI's official BoS portal to find the latest RTPs and suggested answers for your course and attempt.",
+      href: "https://boslive.icai.org/",
+      accent: "sky",
+    },
+    {
+      title: "Mock Test Papers",
+      description: "Use the official ICAI mock-paper announcements, schedules, question papers, and suggested answers.",
+      href: "https://www.icai.org/category/bos-important-announcements/1",
+      accent: "violet",
+    },
+  ];
+
+  return (
+    <div className="mx-auto max-w-5xl space-y-6">
+      <div>
+        <p className="text-sm font-medium text-sky-400">{courseName}</p>
+        <h2 className="mt-1 text-2xl font-bold">CA Practice Papers</h2>
+        <p className="mt-2 max-w-2xl text-sm text-slate-500">
+          Official ICAI revision and mock-test resources for every exam attempt. Links open the source directly, so you always see ICAI's latest published material.
+        </p>
+      </div>
+
+      <div className="grid gap-5 md:grid-cols-2">
+        {officialResources.map((resource) => (
+          <a
+            key={resource.title}
+            href={resource.href}
+            target="_blank"
+            rel="noreferrer"
+            className={`group rounded-2xl border p-6 transition hover:-translate-y-0.5 ${
+              resource.accent === "sky"
+                ? "border-sky-500/30 bg-sky-500/5 hover:border-sky-400/60"
+                : "border-violet-500/30 bg-violet-500/5 hover:border-violet-400/60"
+            }`}
+          >
+            <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${resource.accent === "sky" ? "bg-sky-500/15 text-sky-400" : "bg-violet-500/15 text-violet-400"}`}>
+              <FileText size={21} />
+            </div>
+            <h3 className="mt-5 text-lg font-semibold text-white">{resource.title}</h3>
+            <p className="mt-2 text-sm leading-6 text-slate-400">{resource.description}</p>
+            <span className={`mt-5 inline-flex items-center gap-1 text-sm font-medium ${resource.accent === "sky" ? "text-sky-400" : "text-violet-400"}`}>
+              Open official ICAI resource <ChevronRight size={16} className="transition group-hover:translate-x-1" />
+            </span>
+          </a>
+        ))}
+      </div>
+
+      <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-5 text-sm text-slate-400">
+        ICAI publishes materials on its own schedule. Select your course and examination attempt on the ICAI pages before downloading, and rely on ICAI as the source of truth for applicability and updates.
+      </div>
+    </div>
+  );
+}
+
+/* =========================================================
    ADMIN
 ========================================================= */
 
@@ -2541,6 +2698,8 @@ function getPageTitle(route) {
   if (route === "/targets") return "Daily Targets";
   if (route === "/exams") return "Exams";
   if (route === "/analytics") return "Analytics";
+  if (route === "/assistant") return "AI Study Assistant";
+  if (route === "/ca-practice") return "CA Practice Papers";
   if (route === "/admin") return "Admin panel";
   if (route === "/profile") return "Profile";
 

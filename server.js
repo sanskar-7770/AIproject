@@ -4,6 +4,7 @@ const http = require("http");
 const crypto = require("crypto");
 const dns = require("dns");
 const jwt = require("jsonwebtoken");
+const OpenAI = require("openai");
 const { MongoClient } = require("mongodb");
 
 const PORT = process.env.PORT || 5000;
@@ -11,6 +12,7 @@ const MONGODB_URI = process.env.MONGODB_URI;
 const DATABASE_NAME = process.env.MONGODB_DB_NAME || "apexstudy";
 const JWT_SECRET = process.env.JWT_SECRET;
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || "http://localhost:3000";
+const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-5-mini";
 
 // Some local routers answer Windows DNS requests but refuse Node's SRV lookups.
 // Set MONGODB_DNS_SERVER=1.1.1.1 in .env when that happens.
@@ -19,6 +21,8 @@ if (process.env.MONGODB_DNS_SERVER) {
 }
 
 const mongoClient = new MongoClient(MONGODB_URI || "mongodb://invalid");
+const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
+const assistantRequests = new Map();
 let users;
 
 function hashPassword(password, salt = crypto.randomBytes(16).toString("hex")) {
@@ -57,10 +61,10 @@ function createToken(email) {
 }
 
 async function seedAdmin() {
-  const email = (process.env.ADMIN_EMAIL || "sanskar2416@gmail.com").toLowerCase();
+  const email = (process.env.ADMIN_EMAIL || "admin@apexstudy.local").toLowerCase();
   const existing = await users.findOne({ email });
   if (!existing) {
-    await users.insertOne({ id: `admin-${Date.now()}`, name: "ApexStudy Admin", email, password: hashPassword(process.env.ADMIN_PASSWORD || "Jaishreeram@"), role: "admin", course: "selfStudy", attempt: "", dailyGoal: 6, subjects: [], sessions: [], targets: [], exams: [], activeSession: null, createdAt: new Date().toISOString() });
+    await users.insertOne({ id: `admin-${Date.now()}`, name: "ApexStudy Admin", email, password: hashPassword(process.env.ADMIN_PASSWORD || "change-me-now"), role: "admin", course: "selfStudy", attempt: "", dailyGoal: 6, subjects: [], sessions: [], targets: [], exams: [], activeSession: null, createdAt: new Date().toISOString() });
   }
 }
 
@@ -108,6 +112,24 @@ const server = http.createServer((request, response) => {
       }
       const user = await getAuthenticatedUser(request);
       if (!user) return send(response, 401, { message: "Please sign in again." });
+      if (request.method === "POST" && request.url === "/api/assistant") {
+        if (!openai) return send(response, 503, { message: "The AI assistant has not been configured yet." });
+        const now = Date.now();
+        const recentRequests = (assistantRequests.get(user.email) || []).filter((time) => now - time < 10 * 60 * 1000);
+        if (recentRequests.length >= 12) return send(response, 429, { message: "You've reached the assistant limit for now. Please try again in a few minutes." });
+        const question = String(body.question || "").trim();
+        const history = Array.isArray(body.history) ? body.history.slice(-6) : [];
+        if (!question || question.length > 2000) return send(response, 400, { message: "Please ask a question up to 2,000 characters." });
+        assistantRequests.set(user.email, [...recentRequests, now]);
+        const course = user.course || "Self Study";
+        const responseFromAI = await openai.responses.create({
+          model: OPENAI_MODEL,
+          store: false,
+          instructions: `You are ApexStudy's friendly study assistant. The student is preparing for ${course}. Help them understand concepts, plan revision, solve study doubts step-by-step, and encourage academic integrity. Be concise but clear. If the question depends on an official syllabus, law, regulation, or current exam notification, say that it should be verified with the official source. Do not claim access to private course material or live ICAI updates.`,
+          input: [...history.map((message) => ({ role: message.role === "assistant" ? "assistant" : "user", content: String(message.content || "").slice(0, 2000) })), { role: "user", content: question }],
+        });
+        return send(response, 200, { answer: responseFromAI.output_text || "I couldn't generate an answer. Please try again." });
+      }
       if (request.method === "GET" && request.url === "/api/auth/me") return send(response, 200, { user: publicUser(user) });
       if (request.method === "PATCH" && request.url === "/api/users/me") {
         const allowed = ["name", "course", "attempt", "dailyGoal", "subjects", "sessions", "targets", "exams", "activeSession"];

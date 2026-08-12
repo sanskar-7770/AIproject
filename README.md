@@ -35,6 +35,10 @@ If Node reports `querySrv ECONNREFUSED` but `nslookup` resolves your Atlas hostn
 
 Never commit `.env` or put the MongoDB connection string in the React frontend. For a Netlify deployment, host `server.js` separately (for example on Render or Railway), set the same environment variables there, and set `REACT_APP_API_URL` in Netlify to the public API URL ending in `/api`.
 
+## AI Study Assistant
+
+The AI Study Assistant adapts its replies to the student's selected study path. Add `OPENAI_API_KEY` to the backend service's environment variables (Render), then redeploy the backend. The API key must stay server-side and must not be added to Netlify or to any `REACT_APP_*` variable. Optionally set `OPENAI_MODEL` (defaults to `gpt-5-mini`).
+
 ### `npm test`
 
 Launches the test runner in the interactive watch mode.\
